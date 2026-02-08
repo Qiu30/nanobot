@@ -6,9 +6,10 @@ services:
     ports:
       - "18790:18790"
     volumes:
-      - nanobot-sessions:/root/.nanobot/sessions
-      - nanobot-workspace:/root/.nanobot/workspace
-      - ~/.nanobot/config.json:/root/.nanobot/config.json:ro
+      # Nanobot configuration and data
+      - ~/docker/software/nanobot/.nanobot:/root/.nanobot
+      # Claude Code configuration and projects
+      - ~/docker/software/nanobot/.claude:/root/.claude
     environment:
       - PYTHONIOENCODING=utf-8
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}

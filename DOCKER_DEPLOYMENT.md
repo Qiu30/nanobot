@@ -130,11 +130,27 @@ docker compose up -d --force-recreate
 
 ## 数据持久化
 
-容器使用以下 volumes 持久化数据：
+容器使用以下目录持久化数据（映射到 WSL）：
 
-- `nanobot-sessions`: 会话历史
-- `nanobot-workspace`: Claude Code 工作空间
-- `~/.nanobot/config.json`: 配置文件（只读挂载）
+- `~/docker/software/nanobot/.nanobot`: nanobot 配置和数据
+  - `config.json`: 配置文件
+  - `sessions/`: 会话历史
+  - `workspace/`: 工作空间
+  - `cron/`: 定时任务
+- `~/docker/software/nanobot/.claude`: Claude Code 配置和项目
+  - Claude Code CLI 的配置、会话和项目数据
+
+### 访问配置文件
+
+在 WSL 中直接编辑配置：
+
+```bash
+# 编辑 nanobot 配置
+nano ~/docker/software/nanobot/.nanobot/config.json
+
+# 查看 Claude Code 项目
+ls ~/docker/software/nanobot/.claude/projects/
+```
 
 ## 故障排查
 
