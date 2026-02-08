@@ -18,7 +18,9 @@ from nanobot.agent.tools.web import WebSearchTool, WebFetchTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.cron import CronTool
+from nanobot.agent.tools.claude_code import ClaudeCodeTool
 from nanobot.agent.subagent import SubagentManager
+from nanobot.bridge.claude_code import ClaudeCodeBridge
 from nanobot.session.manager import SessionManager
 
 
@@ -45,8 +47,9 @@ class AgentLoop:
         exec_config: "ExecToolConfig | None" = None,
         cron_service: "CronService | None" = None,
         restrict_to_workspace: bool = False,
+        claude_code_config: "ClaudeCodeConfig | None" = None,
     ):
-        from nanobot.config.schema import ExecToolConfig
+        from nanobot.config.schema import ExecToolConfig, ClaudeCodeConfig
         from nanobot.cron.service import CronService
         self.bus = bus
         self.provider = provider
@@ -57,6 +60,7 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
+        self.claude_code_config = claude_code_config or ClaudeCodeConfig()
         
         self.context = ContextBuilder(workspace)
         self.sessions = SessionManager(workspace)
@@ -105,6 +109,20 @@ class AgentLoop:
         # Cron tool (for scheduling)
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
+
+        # Claude Code tool (for delegating dev tasks)
+        if self.claude_code_config.enabled:
+            bridge = ClaudeCodeBridge(
+                claude_bin=self.claude_code_config.command,
+                working_dir=str(self.workspace),
+                allowed_tools=self.claude_code_config.allowed_tools or None,
+                model=self.claude_code_config.model or None,
+            )
+            claude_code_tool = ClaudeCodeTool(bridge=bridge, bus=self.bus)
+            self.tools.register(claude_code_tool)
+            self._claude_code_bridge = bridge
+        else:
+            self._claude_code_bridge = None
     
     async def run(self) -> None:
         """Run the agent loop, processing messages from the bus."""
@@ -173,7 +191,11 @@ class AgentLoop:
         cron_tool = self.tools.get("cron")
         if isinstance(cron_tool, CronTool):
             cron_tool.set_context(msg.channel, msg.chat_id)
-        
+
+        claude_code_tool = self.tools.get("claude_code")
+        if isinstance(claude_code_tool, ClaudeCodeTool):
+            claude_code_tool.set_context(msg.channel, msg.chat_id)
+
         # Build initial messages (use get_history for LLM-formatted messages)
         messages = self.context.build_messages(
             history=session.get_history(),
@@ -182,7 +204,7 @@ class AgentLoop:
             channel=msg.channel,
             chat_id=msg.chat_id,
         )
-        
+
         # Agent loop
         iteration = 0
         final_content = None
@@ -281,7 +303,11 @@ class AgentLoop:
         cron_tool = self.tools.get("cron")
         if isinstance(cron_tool, CronTool):
             cron_tool.set_context(origin_channel, origin_chat_id)
-        
+
+        claude_code_tool = self.tools.get("claude_code")
+        if isinstance(claude_code_tool, ClaudeCodeTool):
+            claude_code_tool.set_context(origin_channel, origin_chat_id)
+
         # Build messages with the announce content
         messages = self.context.build_messages(
             history=session.get_history(),

@@ -28,18 +28,25 @@ class LiteLLMProvider(LLMProvider):
         self.default_model = default_model
         self.extra_headers = extra_headers or {}
         
-        # Detect OpenRouter by api_key prefix or explicit api_base
+        # Detect provider type from model name and api_base
+        model_lower = default_model.lower()
         self.is_openrouter = (
             (api_key and api_key.startswith("sk-or-")) or
             (api_base and "openrouter" in api_base)
         )
-        
+
         # Detect AiHubMix by api_base
         self.is_aihubmix = bool(api_base and "aihubmix" in api_base)
-        
-        # Track if using custom endpoint (vLLM, etc.)
-        self.is_vllm = bool(api_base) and not self.is_openrouter and not self.is_aihubmix
-        
+
+        # Known providers that support custom api_base natively
+        self._known_providers = {"anthropic", "claude", "deepseek", "openai", "gpt",
+                                 "gemini", "zhipu", "glm", "zai", "groq", "moonshot", "kimi"}
+        self._is_known_provider = any(k in model_lower for k in self._known_providers)
+
+        # Only treat as vLLM if api_base is set AND model is not a known provider AND not aihubmix
+        self.is_vllm = bool(api_base) and not self.is_openrouter and not self.is_aihubmix and not self._is_known_provider
+
+
         # Configure LiteLLM based on provider
         if api_key:
             if self.is_openrouter:

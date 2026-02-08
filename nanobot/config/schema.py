@@ -39,12 +39,20 @@ class DiscordConfig(BaseModel):
     intents: int = 37377  # GUILDS + GUILD_MESSAGES + DIRECT_MESSAGES + MESSAGE_CONTENT
 
 
+class QQConfig(BaseModel):
+    """QQ channel configuration using OneBot 11 protocol."""
+    enabled: bool = False
+    ws_url: str = "ws://localhost:8080"  # OneBot WebSocket URL
+    allow_from: list[str] = Field(default_factory=list)  # Allowed QQ numbers
+
+
 class ChannelsConfig(BaseModel):
     """Configuration for chat channels."""
     whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
     feishu: FeishuConfig = Field(default_factory=FeishuConfig)
+    qq: QQConfig = Field(default_factory=QQConfig)
 
 
 class AgentDefaults(BaseModel):
@@ -105,10 +113,19 @@ class ExecToolConfig(BaseModel):
     timeout: int = 60
 
 
+class ClaudeCodeConfig(BaseModel):
+    """Claude Code bridge configuration."""
+    enabled: bool = False
+    command: str = "claude"  # Path to claude CLI binary
+    allowed_tools: list[str] = Field(default_factory=list)  # If empty, uses --dangerously-skip-permissions
+    model: str = ""  # Claude model to use (empty = default)
+
+
 class ToolsConfig(BaseModel):
     """Tools configuration."""
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
+    claude_code: ClaudeCodeConfig = Field(default_factory=ClaudeCodeConfig)
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
 
 
@@ -156,13 +173,31 @@ class Config(BaseSettings):
     
     def get_api_base(self, model: str | None = None) -> str | None:
         """Get API base URL for the given model. Applies default URLs for known gateways."""
+        model = (model or self.agents.defaults.model).lower()
+
+        # Check specific model patterns first
+        if "openrouter" in model:
+            return self.providers.openrouter.api_base or "https://openrouter.ai/api/v1"
+        if any(k in model for k in ("zhipu", "glm", "zai")):
+            return self.providers.zhipu.api_base
+        if "vllm" in model:
+            return self.providers.vllm.api_base
+
+        # Match provider by model name and return its api_base
+        matched = self._match_provider(model)
+        if matched and matched.api_base:
+            return matched.api_base
+
+        # Fall back to provider-based lookup with gateway defaults
         p = self.get_provider(model)
         if p and p.api_base:
             return p.api_base
+
         # Default URLs for known gateways (openrouter, aihubmix)
         for name, url in self._GATEWAY_DEFAULTS.items():
             if p == getattr(self.providers, name):
                 return url
+
         return None
     
     class Config:
