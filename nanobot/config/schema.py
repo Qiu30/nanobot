@@ -184,18 +184,13 @@ class Config(BaseSettings):
             return self.providers.vllm.api_base
 
         # Match provider by model name and return its api_base
-        matched = self._match_provider(model)
+        matched = self.get_provider(model)
         if matched and matched.api_base:
             return matched.api_base
 
-        # Fall back to provider-based lookup with gateway defaults
-        p = self.get_provider(model)
-        if p and p.api_base:
-            return p.api_base
-
         # Default URLs for known gateways (openrouter, aihubmix)
         for name, url in self._GATEWAY_DEFAULTS.items():
-            if p == getattr(self.providers, name):
+            if matched == getattr(self.providers, name):
                 return url
 
         return None
