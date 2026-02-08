@@ -18,18 +18,44 @@ cd ~/docker/software/nanobot
 ```bash
 # 复制 docker-compose.yml
 cp /path/to/nanobot/docker-compose.yml .
-
-# 复制 .env.example 并配置
-cp /path/to/nanobot/.env.example .env
-nano .env
 ```
 
-### 3. 准备配置文件
+### 3. 配置 Claude Code
+
+创建 Claude Code 配置文件：
+
+```bash
+mkdir -p .claude
+nano .claude/settings.json
+```
+
+配置示例：
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "true",
+    "ANTHROPIC_BASE_URL": "http://your-api-base/",
+    "ANTHROPIC_API_KEY": "your-api-key"
+  },
+  "includeCoAuthoredBy": false
+}
+```
+
+**注意**：
+- Claude Code 会自动读取 `.claude/settings.json` 中的配置
+- `ANTHROPIC_API_KEY`: 你的 API 密钥
+- `ANTHROPIC_BASE_URL`: API 基础 URL（可选）
+
+### 4. 准备 nanobot 配置文件
+
+### 4. 准备 nanobot 配置文件
 
 创建 nanobot 配置目录并添加配置文件：
 
 ```bash
-mkdir -p .nanobot .claude
+mkdir -p .nanobot
 nano .nanobot/config.json
 ```
 
@@ -87,20 +113,20 @@ ANTHROPIC_BASE_URL=https://api.anthropic.com
 
 **注意**：`.env` 文件已在 `.gitignore` 中，不会被提交到 Git。
 
-### 4. 启动容器
+### 5. 启动容器
 
 ```bash
 cd ~/docker/software/nanobot
 docker compose up -d
 ```
 
-### 5. 查看日志
+### 6. 查看日志
 
 ```bash
 docker logs -f nanobot
 ```
 
-### 6. 停止容器
+### 7. 停止容器
 
 ```bash
 docker compose down
