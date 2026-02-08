@@ -7,15 +7,12 @@ services:
       - "18790:18790"
     volumes:
       # Nanobot configuration and data
-      - ~/docker/software/nanobot/.nanobot:/root/.nanobot
+      - ./.nanobot:/root/.nanobot
       # Claude Code configuration and projects
-      - ~/docker/software/nanobot/.claude:/root/.claude
+      - ./.claude:/root/.claude
     environment:
       - PYTHONIOENCODING=utf-8
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
     command: gateway
 
-volumes:
-  nanobot-sessions:
-  nanobot-workspace:

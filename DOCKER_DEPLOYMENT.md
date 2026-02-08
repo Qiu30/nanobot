@@ -2,13 +2,35 @@
 
 ## 快速开始
 
-### 1. 准备配置文件
+### 1. 准备部署目录（WSL）
 
-在 WSL 用户目录下创建配置文件：
+在 WSL 中创建部署目录：
 
 ```bash
-mkdir -p ~/.nanobot
-nano ~/.nanobot/config.json
+mkdir -p ~/docker/software/nanobot
+cd ~/docker/software/nanobot
+```
+
+### 2. 复制部署文件
+
+从项目仓库复制必要的文件：
+
+```bash
+# 复制 docker-compose.yml
+cp /path/to/nanobot/docker-compose.yml .
+
+# 复制 .env.example 并配置
+cp /path/to/nanobot/.env.example .env
+nano .env
+```
+
+### 3. 准备配置文件
+
+创建 nanobot 配置目录并添加配置文件：
+
+```bash
+mkdir -p .nanobot .claude
+nano .nanobot/config.json
 ```
 
 配置示例：
@@ -65,20 +87,20 @@ ANTHROPIC_BASE_URL=https://api.anthropic.com
 
 **注意**：`.env` 文件已在 `.gitignore` 中，不会被提交到 Git。
 
-### 3. 启动容器
+### 4. 启动容器
 
 ```bash
-cd /mnt/e/code/nanobot
+cd ~/docker/software/nanobot
 docker compose up -d
 ```
 
-### 4. 查看日志
+### 5. 查看日志
 
 ```bash
 docker logs -f nanobot
 ```
 
-### 5. 停止容器
+### 6. 停止容器
 
 ```bash
 docker compose down
@@ -130,15 +152,32 @@ docker compose up -d --force-recreate
 
 ## 数据持久化
 
-容器使用以下目录持久化数据（映射到 WSL）：
+容器使用以下目录持久化数据（相对路径）：
 
-- `~/docker/software/nanobot/.nanobot`: nanobot 配置和数据
+- `./.nanobot`: nanobot 配置和数据
   - `config.json`: 配置文件
   - `sessions/`: 会话历史
   - `workspace/`: 工作空间
   - `cron/`: 定时任务
-- `~/docker/software/nanobot/.claude`: Claude Code 配置和项目
+- `./.claude`: Claude Code 配置和项目
   - Claude Code CLI 的配置、会话和项目数据
+
+### 推荐部署位置
+
+```
+~/docker/software/nanobot/
+├── docker-compose.yml       # Docker Compose 配置
+├── .env                     # 环境变量（API 密钥）
+├── .nanobot/               # nanobot 数据目录
+│   ├── config.json
+│   ├── sessions/
+│   ├── workspace/
+│   └── cron/
+└── .claude/                # Claude Code 数据目录
+    ├── projects/
+    ├── todos/
+    └── debug/
+```
 
 ### 访问配置文件
 
