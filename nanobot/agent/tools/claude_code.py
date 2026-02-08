@@ -38,9 +38,17 @@ class ClaudeCodeTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Delegate a development task to Claude Code. "
-            "Claude Code will work on the task in the background and report results. "
-            "If it needs clarification, it will ask the user directly."
+            "Delegate complex development tasks to Claude Code CLI, an autonomous coding agent. "
+            "Use this tool when the user asks to:\n"
+            "- Write, modify, refactor, or improve code files\n"
+            "- Debug or fix code issues\n"
+            "- Implement new features or functionality\n"
+            "- Analyze or review code\n"
+            "- Run commands or tests\n"
+            "- Work with git operations\n"
+            "- Perform multi-step coding tasks\n"
+            "Claude Code has full access to file operations, bash commands, and can work autonomously. "
+            "It will report progress and results back to the user."
         )
 
     @property
@@ -50,7 +58,7 @@ class ClaudeCodeTool(Tool):
             "properties": {
                 "requirement": {
                     "type": "string",
-                    "description": "The development task or requirement for Claude Code",
+                    "description": "The development task or requirement for Claude Code. Be specific about what needs to be done (e.g., 'modify hello.py to add error handling', 'refactor the authentication module', 'fix the bug in user login')",
                 },
                 "working_dir": {
                     "type": "string",
