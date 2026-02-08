@@ -50,6 +50,7 @@ class ClaudeCodeBridge:
         on_output: Callable[[str, str], Awaitable[None]],
         on_question: Callable[[str, str, str], Awaitable[None]],
         on_complete: Callable[[str, str], Awaitable[None]],
+        model: str | None = None,
     ) -> None:
         """
         Start a new Claude Code task.
@@ -60,12 +61,21 @@ class ClaudeCodeBridge:
             on_output: Callback(task_id, text) for assistant text output.
             on_question: Callback(task_id, question, tool_use_id) when user input needed.
             on_complete: Callback(task_id, result) when task finishes.
+            model: Optional model override for this task.
         """
         if task_id in self._tasks:
             raise ValueError(f"Task {task_id} already exists")
 
+        # Temporarily override model if specified
+        original_model = self._model
+        if model:
+            self._model = model
+
         cmd = self._build_command()
         logger.info(f"Claude task [{task_id}] starting: {requirement[:80]}")
+
+        # Restore original model
+        self._model = original_model
 
         # On Windows, use shell mode if path contains spaces
         is_windows = sys.platform == "win32"

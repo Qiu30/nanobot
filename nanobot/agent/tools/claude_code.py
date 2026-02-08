@@ -56,15 +56,28 @@ class ClaudeCodeTool(Tool):
                     "type": "string",
                     "description": "Optional working directory for the task",
                 },
+                "model": {
+                    "type": "string",
+                    "description": "Optional model to use: 'opus' (best quality, slower, expensive), 'sonnet' (balanced, default), or 'haiku' (fast, cheap)",
+                    "enum": ["opus", "sonnet", "haiku"],
+                },
             },
             "required": ["requirement"],
         }
 
-    async def execute(self, requirement: str, working_dir: str | None = None, **kwargs: Any) -> str:
+    async def execute(self, requirement: str, working_dir: str | None = None, model: str | None = None, **kwargs: Any) -> str:
         """Start a Claude Code task in the background."""
         task_id = str(uuid.uuid4())[:8]
         channel = self._channel
         chat_id = self._chat_id
+
+        # Map model shortcuts to full model names
+        model_map = {
+            "opus": "claude-opus-4-6",
+            "sonnet": "claude-sonnet-4-5-20250929",
+            "haiku": "claude-haiku-4-5-20251001",
+        }
+        selected_model = model_map.get(model) if model else None
 
         async def on_output(tid: str, text: str) -> None:
             """Forward Claude Code text output to the user."""
@@ -110,8 +123,10 @@ Result:
                 on_output=on_output,
                 on_question=on_question,
                 on_complete=on_complete,
+                model=selected_model,
             )
-            logger.info(f"Claude Code task [{task_id}] started for {channel}:{chat_id}")
-            return f"Claude Code task started (id: {task_id}). I'll notify you when it completes or if it needs input."
+            model_info = f" using {model} model" if model else ""
+            logger.info(f"Claude Code task [{task_id}] started for {channel}:{chat_id}{model_info}")
+            return f"Claude Code task started (id: {task_id}){model_info}. I'll notify you when it completes or if it needs input."
         except Exception as e:
             return f"Error starting Claude Code task: {e}"
