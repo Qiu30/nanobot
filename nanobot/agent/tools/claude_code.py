@@ -47,7 +47,9 @@ class ClaudeCodeTool(Tool):
             "- Run commands or tests\n"
             "- Work with git operations\n"
             "- Perform multi-step coding tasks\n"
+            "- Clear the current session to start fresh (use action='clear_session')\n"
             "Claude Code has full access to file operations, bash commands, and can work autonomously. "
+            "It maintains session context across multiple tasks in the same chat (1 hour expiry). "
             "It will report progress and results back to the user."
         )
 
@@ -56,9 +58,15 @@ class ClaudeCodeTool(Tool):
         return {
             "type": "object",
             "properties": {
+                "action": {
+                    "type": "string",
+                    "description": "Action to perform: 'execute' to run a task (default), 'clear_session' to clear the current session and start fresh",
+                    "enum": ["execute", "clear_session"],
+                    "default": "execute",
+                },
                 "requirement": {
                     "type": "string",
-                    "description": "The development task or requirement for Claude Code. Be specific about what needs to be done (e.g., 'modify hello.py to add error handling', 'refactor the authentication module', 'fix the bug in user login')",
+                    "description": "The development task or requirement for Claude Code. Be specific about what needs to be done (e.g., 'modify hello.py to add error handling', 'refactor the authentication module', 'fix the bug in user login'). Required when action is 'execute'.",
                 },
                 "working_dir": {
                     "type": "string",
@@ -70,11 +78,20 @@ class ClaudeCodeTool(Tool):
                     "enum": ["opus", "sonnet", "haiku"],
                 },
             },
-            "required": ["requirement"],
+            "required": [],
         }
 
-    async def execute(self, requirement: str, working_dir: str | None = None, model: str | None = None, **kwargs: Any) -> str:
-        """Start a Claude Code task in the background."""
+    async def execute(self, action: str = "execute", requirement: str | None = None, working_dir: str | None = None, model: str | None = None, **kwargs: Any) -> str:
+        """Execute a Claude Code action (run task or clear session)."""
+
+        # Handle clear_session action
+        if action == "clear_session":
+            return self.clear_session()
+
+        # Handle execute action (default)
+        if not requirement:
+            return "Error: 'requirement' parameter is required when action is 'execute'"
+
         task_id = str(uuid.uuid4())[:8]
         channel = self._channel
         chat_id = self._chat_id
