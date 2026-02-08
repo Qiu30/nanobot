@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sys
+import time
 import uuid
 from enum import Enum
 from typing import Any, Callable, Awaitable
@@ -29,6 +30,7 @@ class ClaudeCodeBridge:
     """
 
     MAX_OUTPUT_LEN = 50000  # Truncate output beyond this length
+    SESSION_EXPIRY_SECONDS = 3600  # 1 hour
 
     def __init__(
         self,
@@ -42,6 +44,8 @@ class ClaudeCodeBridge:
         self._allowed_tools: list[str] = allowed_tools or []
         self._model = model
         self._tasks: dict[str, dict[str, Any]] = {}
+        # Session management: context_key -> (session_id, last_used_timestamp)
+        self._sessions: dict[str, tuple[str, float]] = {}
 
     async def start_task(
         self,
@@ -51,6 +55,7 @@ class ClaudeCodeBridge:
         on_question: Callable[[str, str, str], Awaitable[None]],
         on_complete: Callable[[str, str], Awaitable[None]],
         model: str | None = None,
+        context_key: str | None = None,
     ) -> None:
         """
         Start a new Claude Code task.
@@ -62,16 +67,27 @@ class ClaudeCodeBridge:
             on_question: Callback(task_id, question, tool_use_id) when user input needed.
             on_complete: Callback(task_id, result) when task finishes.
             model: Optional model override for this task.
+            context_key: Optional context key for session reuse (e.g., chat_id or user_id).
         """
         if task_id in self._tasks:
             raise ValueError(f"Task {task_id} already exists")
+
+        # Clean up expired sessions
+        self.cleanup_expired_sessions()
+
+        # Check if we can reuse an existing session
+        session_id = None
+        if context_key:
+            session_id = self.get_session_id(context_key)
+            if session_id:
+                logger.info(f"Claude task [{task_id}] reusing session {session_id} for context {context_key}")
 
         # Temporarily override model if specified
         original_model = self._model
         if model:
             self._model = model
 
-        cmd = self._build_command()
+        cmd = self._build_command(session_id=session_id)
         logger.info(f"Claude task [{task_id}] starting: {requirement[:80]}")
 
         # Restore original model
@@ -103,7 +119,8 @@ class ClaudeCodeBridge:
         self._tasks[task_id] = {
             "process": process,
             "status": TaskStatus.RUNNING,
-            "session_id": None,
+            "session_id": session_id,
+            "context_key": context_key,
             "output_buf": [],
             "output_len": 0,
         }
@@ -168,7 +185,7 @@ class ClaudeCodeBridge:
             "session_id": task["session_id"],
         }
 
-    def _build_command(self) -> list[str]:
+    def _build_command(self, session_id: str | None = None) -> list[str]:
         """Build the claude CLI command."""
         cmd = [
             self._claude_bin, "-p",
@@ -178,6 +195,8 @@ class ClaudeCodeBridge:
         ]
         if self._model:
             cmd.extend(["--model", self._model])
+        if session_id:
+            cmd.extend(["--session-id", session_id])
         if self._allowed_tools:
             cmd.extend(["--allowedTools", ",".join(self._allowed_tools)])
         else:
@@ -283,6 +302,11 @@ class ClaudeCodeBridge:
             session_id = event.get("session_id")
             if session_id:
                 task["session_id"] = session_id
+                # Update session mapping if context_key exists
+                context_key = task.get("context_key")
+                if context_key:
+                    self.set_session_id(context_key, session_id)
+                    logger.info(f"Claude task [{task_id}] updated session mapping: {context_key} -> {session_id}")
             if result_text:
                 self._append_output(task_id, result_text)
 
@@ -304,3 +328,70 @@ class ClaudeCodeBridge:
         if len(result) > self.MAX_OUTPUT_LEN:
             result = result[:self.MAX_OUTPUT_LEN] + f"\n... (truncated, {len(result) - self.MAX_OUTPUT_LEN} more chars)"
         return result
+
+    # Session management methods
+
+    def get_session_id(self, context_key: str) -> str | None:
+        """
+        Get the session ID for a given context key.
+
+        Args:
+            context_key: The context identifier (e.g., chat_id or user_id).
+
+        Returns:
+            The session ID if found and not expired, None otherwise.
+        """
+        if context_key not in self._sessions:
+            return None
+
+        session_id, last_used = self._sessions[context_key]
+        current_time = time.time()
+
+        # Check if session has expired
+        if current_time - last_used > self.SESSION_EXPIRY_SECONDS:
+            logger.info(f"Session {session_id} for context {context_key} has expired")
+            del self._sessions[context_key]
+            return None
+
+        return session_id
+
+    def set_session_id(self, context_key: str, session_id: str) -> None:
+        """
+        Set or update the session ID for a given context key.
+
+        Args:
+            context_key: The context identifier (e.g., chat_id or user_id).
+            session_id: The Claude Code session ID to associate.
+        """
+        self._sessions[context_key] = (session_id, time.time())
+        logger.debug(f"Session mapping updated: {context_key} -> {session_id}")
+
+    def cleanup_expired_sessions(self) -> None:
+        """Remove expired sessions from the mapping."""
+        current_time = time.time()
+        expired_keys = [
+            key for key, (_, last_used) in self._sessions.items()
+            if current_time - last_used > self.SESSION_EXPIRY_SECONDS
+        ]
+
+        for key in expired_keys:
+            session_id = self._sessions[key][0]
+            logger.info(f"Cleaning up expired session {session_id} for context {key}")
+            del self._sessions[key]
+
+    def clear_session(self, context_key: str) -> bool:
+        """
+        Clear the session for a given context key.
+
+        Args:
+            context_key: The context identifier to clear.
+
+        Returns:
+            True if a session was cleared, False if no session existed.
+        """
+        if context_key in self._sessions:
+            session_id = self._sessions[context_key][0]
+            logger.info(f"Clearing session {session_id} for context {context_key}")
+            del self._sessions[context_key]
+            return True
+        return False

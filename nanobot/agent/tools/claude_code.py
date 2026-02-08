@@ -71,6 +71,9 @@ class ClaudeCodeTool(Tool):
         channel = self._channel
         chat_id = self._chat_id
 
+        # Build context key for session reuse
+        context_key = f"{channel}:{chat_id}"
+
         # Map model shortcuts to full model names
         model_map = {
             "opus": "claude-opus-4-6",
@@ -124,9 +127,69 @@ Result:
                 on_question=on_question,
                 on_complete=on_complete,
                 model=selected_model,
+                context_key=context_key,
             )
+
+            # Get session info for user feedback
+            task_status = self._bridge.get_task_status(task_id)
+            session_id = task_status.get("session_id")
+
             model_info = f" using {model} model" if model else ""
-            logger.info(f"Claude Code task [{task_id}] started for {channel}:{chat_id}{model_info}")
-            return f"Claude Code task started (id: {task_id}){model_info}. I'll notify you when it completes or if it needs input."
+            session_info = f" (session: {session_id[:8]}...)" if session_id else " (new session)"
+
+            logger.info(f"Claude Code task [{task_id}] started for {context_key}{model_info}{session_info}")
+            return f"Claude Code task started (id: {task_id}){model_info}{session_info}. I'll notify you when it completes or if it needs input."
         except Exception as e:
             return f"Error starting Claude Code task: {e}"
+
+    def clear_session(self, channel: str | None = None, chat_id: str | None = None) -> str:
+        """
+        Clear the session for a specific context or the current context.
+
+        Args:
+            channel: Optional channel to clear. If None, uses current channel.
+            chat_id: Optional chat_id to clear. If None, uses current chat_id.
+
+        Returns:
+            Status message indicating whether the session was cleared.
+        """
+        target_channel = channel or self._channel
+        target_chat_id = chat_id or self._chat_id
+        context_key = f"{target_channel}:{target_chat_id}"
+
+        cleared = self._bridge.clear_session(context_key)
+        if cleared:
+            logger.info(f"Cleared session for context {context_key}")
+            return f"Session cleared for {context_key}"
+        else:
+            return f"No active session found for {context_key}"
+
+    def get_session_info(self, channel: str | None = None, chat_id: str | None = None) -> dict[str, Any]:
+        """
+        Get session information for a specific context or the current context.
+
+        Args:
+            channel: Optional channel to query. If None, uses current channel.
+            chat_id: Optional chat_id to query. If None, uses current chat_id.
+
+        Returns:
+            Dictionary with session information including session_id and last_used timestamp.
+        """
+        target_channel = channel or self._channel
+        target_chat_id = chat_id or self._chat_id
+        context_key = f"{target_channel}:{target_chat_id}"
+
+        session_id = self._bridge.get_session_id(context_key)
+        if session_id:
+            return {
+                "context_key": context_key,
+                "session_id": session_id,
+                "has_session": True,
+            }
+        else:
+            return {
+                "context_key": context_key,
+                "session_id": None,
+                "has_session": False,
+            }
+
